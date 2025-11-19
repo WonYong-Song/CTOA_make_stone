@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame, REWARD_NAMES, REWARD_MODES, clampPosition, getMaxMovesForMode } from './game.js';
+import PuzzlePage from './PuzzlePage.jsx';
 
 // 보상 등급별 색상 매핑
 const REWARD_COLORS = {
@@ -846,11 +847,33 @@ function ViewToggle({ view, onChange }) {
 export default function App() {
   const game = useGame();
   const [view, setView] = useState('game');
+  const [page, setPage] = useState('main'); // 'main' or 'puzzle'
+
+  if (page === 'puzzle') {
+    return (
+      <>
+        <header>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1>🍪 CookieRun:TOA - 잊혀진 기억의 제단 🍪</h1>
+            <button className="btn" onClick={() => setPage('main')}>
+              시즈나이트 광산으로 돌아가기
+            </button>
+          </div>
+        </header>
+        <PuzzlePage />
+      </>
+    );
+  }
 
   return (
     <>
       <header>
-        <h1>🍪 CookieRun:TOA - 시즈나이트 깍기 시뮬레이터 🍪</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1>🍪 CookieRun:TOA - 시즈나이트 깍기 시뮬레이터 🍪</h1>
+          <button className="btn primary" onClick={() => setPage('puzzle')} style={{ marginLeft: 'auto' }}>
+            잊혀진 기억의 제단으로 돌아가기
+          </button>
+        </div>
         <ViewToggle view={view} onChange={setView} />
       </header>
 
