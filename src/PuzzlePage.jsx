@@ -175,7 +175,21 @@ const darkTheme = createTheme({
 
 function PuzzlePage() {
   const [job, setJob] = useState('딜러');
-  const [board, setBoard] = useState(INITIAL_BOARD.map(row => [...row]));
+  
+  // localStorage에서 보드판 상태를 불러오거나 초기값 사용
+  const getInitialBoard = () => {
+    const savedBoard = localStorage.getItem('puzzleBoard');
+    if (savedBoard) {
+      try {
+        return JSON.parse(savedBoard);
+      } catch (e) {
+        console.error('저장된 보드판 상태를 불러오는 중 오류 발생:', e);
+      }
+    }
+    return INITIAL_BOARD.map(row => [...row]);
+  };
+  
+  const [board, setBoard] = useState(getInitialBoard);
   const [pieces, setPieces] = useState([]);
   const [selectedRarity, setSelectedRarity] = useState('레어');
   const [selectedAttribute, setSelectedAttribute] = useState('광휘');
@@ -211,6 +225,11 @@ function PuzzlePage() {
       localStorage.removeItem('puzzlePieces');
     }
   }, [pieces]);
+
+  // 보드판 상태가 변경될 때마다 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('puzzleBoard', JSON.stringify(board));
+  }, [board]);
 
   // 조각 전체 삭제
   const handleClearAllPieces = () => {
