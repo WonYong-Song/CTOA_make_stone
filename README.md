@@ -23,6 +23,8 @@ python3 -m http.server 8080
 
 ## GitHub Pages 배포
 
+### gh-pages를 사용한 배포 (권장)
+
 1. GitHub에 새 저장소를 만든 뒤, 현재 프로젝트를 푸시합니다.
 
 ```bash
@@ -34,17 +36,37 @@ git remote add origin git@github.com:<YOUR_ID>/<REPO>.git
 git push -u origin main
 ```
 
-2. GitHub 웹에서 Settings → Pages로 이동합니다.
-- Source: `GitHub Actions` 선택
+2. 의존성 설치 및 배포:
 
-3. 로컬에서 의존성 설치 및 빌드 아티팩트 커밋은 필요 없습니다. GitHub Actions로 빌드/배포를 구성하거나, 단순히 `main` 브랜치에 코드 푸시 후 Pages Action 템플릿을 사용하세요.
+```bash
+npm install
+npm run deploy
+```
 
-직접 배포하고 싶다면(수동):
+`npm run deploy` 명령은 다음을 수행합니다:
+- `predeploy` 스크립트가 자동으로 실행되어 `npm run build`를 실행합니다.
+- 빌드된 `dist` 폴더의 내용이 `gh-pages` 브랜치에 자동으로 푸시됩니다.
+
+3. GitHub 웹에서 Settings → Pages로 이동합니다.
+- Source: `Deploy from a branch` 선택
+- Branch: `gh-pages` 선택
+- Folder: `/ (root)` 선택
+- Save 클릭
+
+4. 배포 완료 후 몇 분 후에 `https://<YOUR_ID>.github.io/<REPO>/`에서 사이트를 확인할 수 있습니다.
+
+**참고**: 
+- `package.json`의 `homepage` 필드에 올바른 GitHub Pages URL이 설정되어 있어야 합니다.
+- 이후 코드를 수정하고 배포하려면 다시 `npm run deploy`를 실행하면 됩니다.
+
+### 수동 배포 (대안)
+
+직접 배포하고 싶다면:
 
 ```bash
 npm i
 npm run build
-# dist 폴더를 Pages에 올리거나, gh-pages 브랜치로 배포
+# dist 폴더의 내용을 gh-pages 브랜치에 수동으로 푸시
 ```
 
 ## 커스터마이즈
