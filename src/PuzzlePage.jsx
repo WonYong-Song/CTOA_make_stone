@@ -28,6 +28,21 @@ const RARITY_COLORS = {
   '유니크': '#f9f28a',    // 노란색 (명도 80%)
 };
 
+// 속성별 테두리 색상 (명도 70%)
+const ATTRIBUTE_BORDER_COLORS = {
+  '광휘': '#ffd700',      // 금색
+  '관통': '#c0c0c0',      // 은색
+  '원소': '#00ffff',      // 청록색
+  '파쇄': '#ff6347',      // 토마토색
+  '축복': '#9370db',      // 보라색
+  '낙인': '#ff1493',      // 딥핑크
+  '재생': '#32cd32',      // 라임그린
+  '딜러': '#4169e1',      // 로얄블루
+  '스트라이커': '#ff4500', // 오렌지레드
+  '서포터': '#20b2aa',    // 라이트시그린
+  '전 역할군': '#daa520',  // 골든로드
+};
+
 // 등급별 칸당 점수
 const RARITY_SCORES = {
   '레어': 30,
@@ -1783,8 +1798,12 @@ function PuzzlePage() {
               // border 스타일 결정
               const borderStyle = isInitial ? '#3b82f6' : 'var(--border)';
               const borderWidth = isUsed ? '8px' : '1px';
+              // 속성별 테두리 색상 사용 (속성이 있으면 속성 색상, 없으면 기본 초록색)
+              const attributeBorderColor = currentPiece?.attribute 
+                ? (ATTRIBUTE_BORDER_COLORS[currentPiece.attribute] || '#62856F')
+                : '#62856F';
               const borderColor = isUsed && currentPiece 
-                ? '#22c55e' // 초록색으로 조각 경계 표시
+                ? attributeBorderColor // 속성별 색상으로 조각 경계 표시
                 : borderStyle;
               
               // 스타일 객체 생성
@@ -1827,7 +1846,15 @@ function PuzzlePage() {
                   key={`${rowIdx}-${colIdx}`}
                   onClick={() => handleCellClick(rowIdx, colIdx)}
                   style={cellStyle}
-                  title={isInitial ? '초기 열려있는 칸 (닫을 수 없음)' : cell === 1 ? '열려있음' : '닫혀있음'}
+                  title={
+                    isInitial 
+                      ? '초기 열려있는 칸 (닫을 수 없음)' 
+                      : isUsed && pieceInfo
+                        ? `${pieceInfo.rarity} · ${pieceInfo.attribute} (${pieceInfo.size}칸)`
+                        : cell === 1 
+                          ? '열려있음' 
+                          : '닫혀있음'
+                  }
                 >
                   {cell === 0 ? (
                     <span style={{ 
@@ -1836,12 +1863,19 @@ function PuzzlePage() {
                     }}>
                       🔒
                     </span>
-                  ) : isUsed && (
+                  ) : isUsed && pieceInfo && (
                     <span style={{ 
                       color: '#fff', 
                       fontWeight: 'bold',
-                      textShadow: '0 0 2px rgba(0,0,0,0.5)',
+                      textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                      fontSize: '8px',
+                      lineHeight: 1,
+                      textAlign: 'center',
+                      wordBreak: 'keep-all',
                     }}>
+                      {pieceInfo.attribute && pieceInfo.attribute.length <= 3 
+                        ? pieceInfo.attribute 
+                        : pieceInfo.attribute?.substring(0, 2)}
                     </span>
                   )}
                 </div>
