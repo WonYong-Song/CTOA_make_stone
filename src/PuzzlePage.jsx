@@ -1691,7 +1691,7 @@ function PuzzlePage() {
                   maxWidth: '300px'
                 }}
               >
-                * 해당 최적화는 알고리즘에 따라 출력된 값으로 최고 점수가 아닐 수 있음
+                * 해당 최적화는 선택된 역할에 해당하는 설탕유리 조각을 활용하여 알고리즘에 따라 출력된 값으로 최고 점수가 아닐 수 있음
               </Typography>
               <IconButton
                 onClick={() => setShowHelp(true)}
