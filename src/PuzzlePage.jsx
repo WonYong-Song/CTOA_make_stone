@@ -416,7 +416,10 @@ function PuzzlePage() {
   // 선택 가능한 조각 목록 가져오기
   const getAvailableShapes = (size) => {
     if (size === 8) {
-      return PIECE_SHAPES[8][job] || [];
+      // 현재 역할군 조각 + 전 역할군 조각 모두 포함
+      const jobShapes = PIECE_SHAPES[8][job] || [];
+      const allJobShapes = PIECE_SHAPES[8]['전 역할군'] || [];
+      return [...jobShapes, ...allJobShapes];
     } else {
       return PIECE_SHAPES[size] || [];
     }
@@ -430,13 +433,25 @@ function PuzzlePage() {
 
     const shapeCoords = shape2DToCoords(selectedShape.shape);
     
+    // 8칸 조각의 경우, 조각 이름으로 역할군 판단
+    let pieceAttribute = attribute;
+    if (size === 8) {
+      // 조각 이름에 "전직업" 또는 "전 역할군"이 포함되어 있으면 "전 역할군"
+      if (selectedShape.name.includes('전직업') || selectedShape.name.includes('전 역할군')) {
+        pieceAttribute = '전 역할군';
+      } else {
+        // 그 외는 현재 역할군
+        pieceAttribute = job;
+      }
+    }
+    
     const newPiece = {
       id: Date.now(),
       shape: selectedShape.name,
       shapeCoords: shapeCoords,
       size: size,
       rarity: size === 8 ? '유니크' : rarity,
-      attribute: size === 8 ? job : attribute,
+      attribute: pieceAttribute,
     };
     
     setPieces([...pieces, newPiece]);
@@ -546,13 +561,12 @@ function PuzzlePage() {
     });
   };
 
-  // 백트래킹으로 최적 잊혀진 기억의 제단 최적화
+  // 최고 점수 계산 후 퍼즐 맞추기 방식으로 최적화
   const findBestCombination = () => {
     setIsCalculating(true);
     
     // 비동기로 계산하여 UI 블로킹 방지
     setTimeout(() => {
-      const usedCells = new Set();
       let bestResult = {
         placedPieces: [],
         score: { baseScore: 0, bonusScore: 0, totalScore: 0 },
@@ -586,34 +600,34 @@ function PuzzlePage() {
         return;
       }
       
-      // 역할군과 일치하는 조각 (1~5칸 조각 중 속성이 역할군과 일치)
+      // 역할군과 일치하는 조각 (1~5칸 조각 중 속성이 역할군과 일치, 8칸은 현재 역할군 또는 전 역할군)
       const matchingPieces = allPieces.filter(p => {
-        if (p.size === 8) return p.attribute === job; // 8칸은 직업군이 속성
+        if (p.size === 8) {
+          // 8칸은 현재 역할군 또는 전 역할군 포함
+          return p.attribute === job || p.attribute === '전 역할군';
+        }
         return p.size <= 5 && p.attribute && jobAttributes.includes(p.attribute);
       });
       
-      // 역할군과 불일치하는 조각
+      // 역할군과 불일치하는 조각 (8칸은 현재 역할군과 전 역할군이 아닌 것만)
       const nonMatchingPieces = allPieces.filter(p => {
-        if (p.size === 8) return p.attribute !== job;
+        if (p.size === 8) {
+          return p.attribute !== job && p.attribute !== '전 역할군';
+        }
         return p.size <= 5 && (!p.attribute || !jobAttributes.includes(p.attribute));
       });
       
-      // 2. 추가보상을 받을 수 있는 보상 구간 설정
-      // 보너스 구간: 9, 12, 15, 18, 21칸
-      // 최적의 조합 찾기: 가능한 많은 속성을 21칸까지 채우고, 나머지는 다른 속성으로 채우기
-      
-      // 3. 역할군 조각 중 등급이 높은 것을 우선 사용하여 빈칸 채우는 로직
+      // 조각 정렬: 등급이 높은 순, 같은 등급이면 크기가 큰 순
       const sortByRarity = (a, b) => {
         const rarityOrder = { '유니크': 4, '슈퍼에픽': 3, '에픽': 2, '레어': 1 };
         const orderA = rarityOrder[a.rarity] || 0;
         const orderB = rarityOrder[b.rarity] || 0;
         if (orderA !== orderB) return orderB - orderA;
-        // 등급이 같으면 크기가 큰 순
         return b.size - a.size;
       };
       
-      // 모든 역할군 조각을 등급 순으로 먼저 정렬 (속성 무관, 등급이 높은 조각 우선)
       matchingPieces.sort(sortByRarity);
+      nonMatchingPieces.sort(sortByRarity);
       
       // 역할군 속성별로 조각 그룹화
       const piecesByAttribute = {};
@@ -621,10 +635,9 @@ function PuzzlePage() {
         piecesByAttribute[attr] = matchingPieces.filter(p => p.attribute === attr);
       });
       
-      // 각 속성의 점수 효율 계산 (등급이 높은 조각이 많은 속성을 우선 배치)
+      // 속성별 점수 계산 및 정렬 (점수가 높은 속성부터)
       const attributeScores = {};
       Object.keys(piecesByAttribute).forEach(attr => {
-        // 각 속성의 총 점수 효율 계산 (21칸까지 채울 수 있는 조각들의 점수 합)
         let totalScore = 0;
         let totalSize = 0;
         piecesByAttribute[attr].forEach(piece => {
@@ -634,173 +647,910 @@ function PuzzlePage() {
             totalSize += piece.size;
           }
         });
-        // 21칸까지 채울 때의 평균 점수 효율
-        attributeScores[attr] = totalSize > 0 ? totalScore / totalSize : 0;
+        // 보너스 점수 포함 계산
+        let bonusScore = 0;
+        if (totalSize >= 9) bonusScore += 265;
+        if (totalSize >= 12) bonusScore += 265;
+        if (totalSize >= 15) bonusScore += 265;
+        if (totalSize >= 18) bonusScore += 265;
+        if (totalSize >= 21) bonusScore += 265;
+        attributeScores[attr] = totalScore + bonusScore;
       });
       
-      // 점수 효율이 높은 속성을 먼저 배치하도록 정렬
+      // 점수가 높은 속성부터 정렬
       const sortedAttributeKeys = Object.keys(piecesByAttribute).sort((a, b) => {
-        // 점수 효율이 높은 순
-        if (attributeScores[a] !== attributeScores[b]) {
-          return attributeScores[b] - attributeScores[a];
-        }
-        // 점수 효율이 같으면 조각 수가 많은 순
-        return piecesByAttribute[b].length - piecesByAttribute[a].length;
+        return attributeScores[b] - attributeScores[a];
       });
       
-      // 한 속성을 21칸까지 먼저 채우고, 그 다음 다른 속성을 채우도록 순차적으로 정렬
-      // 점수 효율이 높은 속성부터 배치하되, 각 속성 내에서는 등급 순으로 정렬된 순서 유지
-      const sequentialMatching = [];
+      console.log('속성별 점수 순위:', sortedAttributeKeys.map(attr => 
+        `${attr}: ${attributeScores[attr]}점`
+      ));
+      
+      // ===== 1단계: 최고 점수 계산 (우선순위 기반) =====
+      const calculateOptimalTarget = () => {
+        let targetBaseScore = 0;
+        let targetBonusScore = 0;
+        const targetPieces = [];
+        const targetAttributeCounts = {};
+        let usedUnique = 0;
+        let usedCellCount = 0;
+        
+        // 우선순위 1: 역할군에 옵션이 적용되는 유니크 조각 (현재 역할군 또는 전 역할군)
+        const uniquePieces = matchingPieces.filter(p => p.size === 8 && (p.attribute === job || p.attribute === '전 역할군'));
+        uniquePieces.sort(sortByRarity); // 등급 높은 순
+        
+        for (const piece of uniquePieces) {
+          if (usedUnique >= 1) break; // 유니크는 최대 1개
+          if (usedCellCount + piece.size > totalOpenCells) continue;
+          
+          targetPieces.push(piece);
+          targetBaseScore += RARITY_SCORES[piece.rarity] * piece.size;
+          usedCellCount += piece.size;
+          usedUnique++;
+        }
+        
+        // 우선순위 2: 21개 모았을 때 점수가 높은 속성 조합
+        // 속성별로 21칸까지 채울 때의 점수 계산 (기본 점수 + 보너스 점수)
+        const attribute21Scores = {};
+        jobAttributes.forEach(attr => {
+          const attrPieces = piecesByAttribute[attr] || [];
+          let attrBaseScore = 0;
+          let attrSize = 0;
+          let attrUsedUnique = usedUnique; // 이미 사용된 유니크 반영
+          
+          for (const piece of attrPieces) {
+            // 이미 사용된 조각인지 확인 (유니크 조각 포함)
+            const isUsed = targetPieces.some(p => p.id === piece.id);
+            if (isUsed) continue;
+            
+            if (piece.rarity === '유니크' && attrUsedUnique >= 1) continue;
+            if (attrSize + piece.size > 21) continue;
+            
+            attrBaseScore += RARITY_SCORES[piece.rarity] * piece.size;
+            attrSize += piece.size;
+            if (piece.rarity === '유니크') attrUsedUnique++;
+          }
+          
+          // 21칸 달성 시 보너스 점수
+          let attrBonusScore = 0;
+          if (attrSize >= 21) {
+            if (attrSize >= 9) attrBonusScore += 265;
+            if (attrSize >= 12) attrBonusScore += 265;
+            if (attrSize >= 15) attrBonusScore += 265;
+            if (attrSize >= 18) attrBonusScore += 265;
+            if (attrSize >= 21) attrBonusScore += 265;
+          }
+          
+          attribute21Scores[attr] = attrBaseScore + attrBonusScore;
+        });
+        
+        // 점수가 높은 속성부터 정렬
+        const sortedBy21Score = Object.keys(attribute21Scores).sort((a, b) => {
+          return attribute21Scores[b] - attribute21Scores[a];
+        });
+        
+        // 우선순위 2: 가장 점수가 높은 속성부터 21칸까지 채우기
+        for (const attr of sortedBy21Score) {
+          if (targetAttributeCounts[attr] >= 21) continue;
+          
+          const attrPieces = piecesByAttribute[attr] || [];
+          for (const piece of attrPieces) {
+            // 이미 사용된 조각인지 확인
+            const isUsed = targetPieces.some(p => p.id === piece.id);
+            if (isUsed) continue;
+            
+            if (piece.rarity === '유니크' && usedUnique >= 1) continue;
+            if (targetAttributeCounts[attr] + piece.size > 21) continue;
+            if (usedCellCount + piece.size > totalOpenCells) continue;
+            
+            targetPieces.push(piece);
+            targetBaseScore += RARITY_SCORES[piece.rarity] * piece.size;
+            targetAttributeCounts[attr] += piece.size;
+            usedCellCount += piece.size;
+            
+            if (piece.rarity === '유니크') {
+              usedUnique++;
+            }
+          }
+        }
+        
+        // 우선순위 3: 21개 속성 이후 같은 역할군의 다른 속성에서 등급이 높은 조각칸이 많은 속성으로 21을 목표로 보너스 등급 달성
+        // 아직 21칸을 채우지 못한 속성들을 등급 높은 조각이 많은 순으로 정렬
+        const remainingAttributes = sortedBy21Score.filter(attr => targetAttributeCounts[attr] < 21);
+        
+        // 각 속성의 남은 칸 수와 등급 높은 조각의 칸 수 계산
+        const attributeRemainingScores = {};
+        remainingAttributes.forEach(attr => {
+          const attrPieces = piecesByAttribute[attr] || [];
+          let highRarityCells = 0; // 슈퍼에픽 이상 조각의 칸 수
+          let remainingCells = 21 - targetAttributeCounts[attr];
+          
+          for (const piece of attrPieces) {
+            if (piece.rarity === '유니크' && usedUnique >= 1) continue;
+            if (targetAttributeCounts[attr] + piece.size > 21) continue;
+            
+            // 이미 사용된 조각인지 확인
+            const isUsed = targetPieces.some(p => p.id === piece.id);
+            if (isUsed) continue;
+            
+            if (piece.rarity === '슈퍼에픽' || piece.rarity === '유니크') {
+              highRarityCells += piece.size;
+            }
+          }
+          
+          // 등급 높은 조각 칸 수가 많은 속성 우선
+          attributeRemainingScores[attr] = highRarityCells;
+        });
+        
+        // 등급 높은 조각 칸 수가 많은 순으로 정렬
+        const sortedByHighRarity = remainingAttributes.sort((a, b) => {
+          return attributeRemainingScores[b] - attributeRemainingScores[a];
+        });
+        
+        // 우선순위 3: 등급 높은 조각이 많은 속성부터 21칸까지 채우기
+        for (const attr of sortedByHighRarity) {
+          if (targetAttributeCounts[attr] >= 21) continue;
+          
+          const attrPieces = piecesByAttribute[attr] || [];
+          for (const piece of attrPieces) {
+            if (piece.rarity === '유니크' && usedUnique >= 1) continue;
+            if (targetAttributeCounts[attr] + piece.size > 21) continue;
+            if (usedCellCount + piece.size > totalOpenCells) continue;
+            
+            // 이미 사용된 조각인지 확인
+            const isUsed = targetPieces.some(p => p.id === piece.id);
+            if (isUsed) continue;
+            
+            targetPieces.push(piece);
+            targetBaseScore += RARITY_SCORES[piece.rarity] * piece.size;
+            targetAttributeCounts[attr] += piece.size;
+            usedCellCount += piece.size;
+            
+            if (piece.rarity === '유니크') {
+              usedUnique++;
+            }
+          }
+        }
+        
+        // 우선순위 4: 짜투리 칸은 역할군 내에서 아무 조각으로 처리
+        const remainingPieces = matchingPieces.filter(p => {
+          // 이미 사용된 조각 제외
+          if (targetPieces.some(used => used.id === p.id)) return false;
+          // 유니크는 이미 사용했으면 제외
+          if (p.rarity === '유니크' && usedUnique >= 1) return false;
+          return true;
+        });
+        
+        // 등급 높은 순으로 정렬
+        remainingPieces.sort(sortByRarity);
+        
+        // 남은 칸을 채우기
+        for (const piece of remainingPieces) {
+          if (usedCellCount + piece.size > totalOpenCells) continue;
+          if (piece.rarity === '유니크' && usedUnique >= 1) continue;
+          
+          targetPieces.push(piece);
+          targetBaseScore += RARITY_SCORES[piece.rarity] * piece.size;
+          
+          // 속성별 칸 수 업데이트 (21칸 초과해도 추가)
+          if (piece.size <= 5 && piece.attribute) {
+            targetAttributeCounts[piece.attribute] = (targetAttributeCounts[piece.attribute] || 0) + piece.size;
+          }
+          
+          usedCellCount += piece.size;
+          if (piece.rarity === '유니크') {
+            usedUnique++;
+          }
+        }
+        
+        // 보너스 점수 계산
+        Object.entries(targetAttributeCounts).forEach(([attr, count]) => {
+          if (count >= 9) targetBonusScore += 265;
+          if (count >= 12) targetBonusScore += 265;
+          if (count >= 15) targetBonusScore += 265;
+          if (count >= 18) targetBonusScore += 265;
+          if (count >= 21) targetBonusScore += 265;
+        });
+        
+        return {
+          pieces: targetPieces,
+          baseScore: targetBaseScore,
+          bonusScore: targetBonusScore,
+          totalScore: targetBaseScore + targetBonusScore,
+          attributeCounts: targetAttributeCounts,
+        };
+      };
+      
+      const target = calculateOptimalTarget();
+      console.log('목표 점수:', target.totalScore, '목표 조각 수:', target.pieces.length);
+      
+      // 속성별 점수 순위에 따라 조각 정렬 (역할군 속성 조각만 사용)
+      const sortedMatchingPieces = [];
       sortedAttributeKeys.forEach(attr => {
-        // 이미 등급 순으로 정렬된 matchingPieces에서 해당 속성의 조각들을 순서대로 가져옴
         matchingPieces.forEach(piece => {
           if (piece.attribute === attr) {
-            sequentialMatching.push(piece);
+            sortedMatchingPieces.push(piece);
           }
         });
       });
+      // 역할군 속성 조각만 사용 (불일치 조각 제외)
+      const sortedAllPieces = [...sortedMatchingPieces];
       
-      nonMatchingPieces.sort(sortByRarity);
-      
-      // 역할군 일치 조각을 먼저 (속성별로 순차적으로), 불일치 조각을 나중에 배치
-      const sortedPieces = [...sequentialMatching, ...nonMatchingPieces];
-      
-      let searchCount = 0;
-      const MAX_SEARCH = 5000000; // 탐색 횟수 제한
-      
-      // 현재 배치된 조각들의 속성별 칸 수 계산
-      const getCurrentAttributeCounts = (placedPieces) => {
-        const counts = {
-          광휘: 0, 관통: 0, 원소: 0, 파쇄: 0,
-          축복: 0, 낙인: 0, 재생: 0,
-        };
-        placedPieces.forEach(piece => {
-          if (piece.size <= 5 && piece.attribute) {
-            counts[piece.attribute] += piece.size;
+      // ===== 2단계: 백트래킹 알고리즘 =====
+      const solveWithBacktracking = (piecesToPlace) => {
+        // 조각을 배치 순서로 정렬 (역할군 일치 조각 먼저, 등급 높은 순)
+        const sortedTargetPieces = [...piecesToPlace].sort((a, b) => {
+          const aIsMatching = jobAttributes.includes(a.attribute);
+          const bIsMatching = jobAttributes.includes(b.attribute);
+          if (aIsMatching !== bIsMatching) {
+            return bIsMatching ? 1 : -1; // 일치하는 조각 먼저
           }
+          return sortByRarity(a, b);
         });
-        return counts;
-      };
-
-      // 백트래킹 함수 (보상 구간을 고려한 최적화)
-      const backtrack = (pieceIndex, currentPlaced, localUsedCells, usedUnique) => {
-        searchCount++;
         
-        // 탐색 횟수 제한 (너무 많은 조각일 때 무한 루프 방지)
-        if (searchCount > MAX_SEARCH) {
-          return;
-        }
-
-        // 모든 조각을 확인했거나 17개 이상 설치한 경우 점수 계산
-        if (pieceIndex >= sortedPieces.length || currentPlaced.length > 17) {
-          const score = calculateScore(currentPlaced, board);
-          if (score.totalScore > bestResult.score.totalScore) {
-            bestResult = {
-              placedPieces: [...currentPlaced],
-              score,
-              usedCells: Array.from(localUsedCells),
-            };
+        let bestPlaced = [];
+        let bestScore = 0;
+        let searchCount = 0;
+        const MAX_BACKTRACK_SEARCH = 100000; // 탐색 제한 증가
+        
+        // 모든 조각 사용 (개수 제한 없음)
+        // 역할군 속성 조각이 먼저 오도록 이미 정렬되어 있음
+        
+        // 백트래킹으로 모든 조각 배치 시도
+        const backtrack = (pieceIndex, currentPlaced, localUsedCells, usedUnique) => {
+          searchCount++;
+          if (searchCount > MAX_BACKTRACK_SEARCH) {
+            return; // 탐색 제한 초과
           }
-          return;
-        }
-
-        const piece = sortedPieces[pieceIndex];
-        
-        // 현재 속성별 칸 수 확인
-        const currentAttrCounts = getCurrentAttributeCounts(currentPlaced);
-        
-        // 유니크 제한 확인
-        if (piece.rarity === '유니크' && usedUnique >= 1) {
-          // 유니크는 최대 1개만 사용 가능
+          
+          // 모든 조각을 배치했으면 점수 계산
+          if (pieceIndex >= sortedTargetPieces.length) {
+            const score = calculateScore(currentPlaced, board);
+            if (score.totalScore > bestScore) {
+              bestScore = score.totalScore;
+              bestPlaced = [...currentPlaced];
+            }
+            return;
+          }
+          
+          const piece = sortedTargetPieces[pieceIndex];
+          
+          // 유니크 제한 확인
+          if (piece.rarity === '유니크' && usedUnique >= 1) {
+            // 이 조각을 건너뛰기
+            backtrack(pieceIndex + 1, currentPlaced, localUsedCells, usedUnique);
+            return;
+          }
+          
+          // 가능한 위치 찾기
+          const possiblePositions = [];
+          for (const { row, col } of openCells) {
+            if (canPlacePiece(piece, row, col, localUsedCells)) {
+              possiblePositions.push({ row, col });
+            }
+          }
+          
+          // 위치를 중앙에 가까운 순으로 정렬
+          possiblePositions.sort((a, b) => {
+            const distA = Math.abs(a.row - 3) + Math.abs(a.col - 3);
+            const distB = Math.abs(b.row - 3) + Math.abs(b.col - 3);
+            return distA - distB;
+          });
+          
+          // 이 조각을 배치하지 않는 경우
           backtrack(pieceIndex + 1, currentPlaced, localUsedCells, usedUnique);
-          return;
-        }
+          
+          // 이 조각을 배치하는 경우 (최대 2개 위치만 시도하여 성능 최적화)
+          const maxPositions = Math.min(2, possiblePositions.length);
+          for (let i = 0; i < maxPositions; i++) {
+            if (searchCount > MAX_BACKTRACK_SEARCH) break;
+            
+            const { row, col } = possiblePositions[i];
+            const newUsedCells = new Set(localUsedCells);
+            const placedCells = placePiece(piece, row, col, newUsedCells);
+            
+            const newPlaced = [...currentPlaced, {
+              ...piece,
+              position: { row, col },
+              placedCells,
+            }];
+            
+            const newUsedUnique = usedUnique + (piece.rarity === '유니크' ? 1 : 0);
+            backtrack(pieceIndex + 1, newPlaced, newUsedCells, newUsedUnique);
+          }
+        };
         
-        // 현재 조각을 배치하는 경우를 먼저 시도 (더 좋은 해를 먼저 찾기 위해)
-        if (piece.shapeCoords) {
-          // 역할군 속성인 경우 보상 구간 체크
-          let shouldSkipPiece = false;
-          if (piece.size <= 5 && piece.attribute) {
-            const jobAttributes = JOB_ATTRIBUTES[job] || [];
-            if (jobAttributes.includes(piece.attribute)) {
-              const currentCount = currentAttrCounts[piece.attribute] || 0;
-              // 21칸을 넘어서게 되면 이 조각은 배치하지 않음 (보너스가 더 이상 증가하지 않음)
-              if (currentCount >= 21) {
-                shouldSkipPiece = true;
+        const initialUsedCells = new Set();
+        backtrack(0, [], initialUsedCells, 0);
+        
+        return bestPlaced;
+      };
+      
+      // ===== 3단계: 분기 한정법 알고리즘 =====
+      const solveWithBranchAndBound = () => {
+        let bestResult = {
+          placedPieces: [],
+          score: { baseScore: 0, bonusScore: 0, totalScore: 0 },
+        };
+        
+        // 현재 배치된 조각들의 속성별 칸 수 계산
+        const getCurrentAttributeCounts = (placedPieces) => {
+          const counts = {
+            광휘: 0, 관통: 0, 원소: 0, 파쇄: 0,
+            축복: 0, 낙인: 0, 재생: 0,
+          };
+          placedPieces.forEach(piece => {
+            if (piece.size <= 5 && piece.attribute) {
+              counts[piece.attribute] += piece.size;
+            }
+          });
+          return counts;
+        };
+        
+        // 상한(upper bound) 계산 함수
+        const calculateUpperBound = (pieceIndex, currentPlaced, localUsedCells, usedUnique) => {
+          const currentScore = calculateScore(currentPlaced, board);
+          let upperBound = currentScore.totalScore;
+          
+          // 남은 조각들 중 가장 좋은 조각들을 배치했을 때의 최대 점수 추정
+          const remainingPieces = sortedAllPieces.slice(pieceIndex);
+          const remainingCells = new Set();
+          for (let row = 0; row < 7; row++) {
+            for (let col = 0; col < 7; col++) {
+              if (board[row][col] === 1) {
+                const cellKey = `${row}-${col}`;
+                if (!localUsedCells.has(cellKey)) {
+                  remainingCells.add(cellKey);
+                }
               }
             }
           }
           
-          // 21칸 제한에 걸리지 않는 경우에만 배치 시도
-          if (!shouldSkipPiece) {
-            // 가능한 위치를 찾아서 시도
-            const possiblePositions = [];
-            for (const { row, col } of openCells) {
-              if (canPlacePiece(piece, row, col, localUsedCells)) {
-                possiblePositions.push({ row, col });
+          const remainingCellCount = remainingCells.size;
+          if (remainingCellCount === 0) {
+            return upperBound;
+          }
+          
+          // 남은 조각들을 점수 효율 순으로 정렬
+          const pieceEfficiency = remainingPieces.map(piece => {
+            const pieceScore = RARITY_SCORES[piece.rarity] * piece.size;
+            return {
+              piece,
+              efficiency: pieceScore / piece.size,
+              score: pieceScore,
+              size: piece.size,
+            };
+          }).sort((a, b) => b.efficiency - a.efficiency);
+          
+          const currentAttrCounts = getCurrentAttributeCounts(currentPlaced);
+          let estimatedBaseScore = currentScore.baseScore;
+          let estimatedAttrCounts = { ...currentAttrCounts };
+          let remainingUnique = usedUnique;
+          let usedCellCount = 0;
+          
+          for (const { piece, score, size } of pieceEfficiency) {
+            if (piece.rarity === '유니크' && remainingUnique >= 1) {
+              continue;
+            }
+            if (usedCellCount + size > remainingCellCount) {
+              continue;
+            }
+            if (piece.size <= 5 && piece.attribute) {
+              const jobAttributes = JOB_ATTRIBUTES[job] || [];
+              if (jobAttributes.includes(piece.attribute)) {
+                const currentCount = estimatedAttrCounts[piece.attribute] || 0;
+                if (currentCount >= 21) {
+                  continue;
+                }
               }
             }
             
-            // 위치를 점수 효율 순으로 정렬 (중앙에 가까운 위치 우선)
-            possiblePositions.sort((a, b) => {
-              const distA = Math.abs(a.row - 3) + Math.abs(a.col - 3);
-              const distB = Math.abs(b.row - 3) + Math.abs(b.col - 3);
-              return distA - distB;
-            });
+            estimatedBaseScore += score;
+            usedCellCount += size;
+            if (piece.size <= 5 && piece.attribute) {
+              estimatedAttrCounts[piece.attribute] = (estimatedAttrCounts[piece.attribute] || 0) + size;
+            }
+            if (piece.rarity === '유니크') {
+              remainingUnique++;
+            }
+          }
+          
+          // 보너스 점수 추정
+          let estimatedBonusScore = 0;
+          Object.entries(estimatedAttrCounts).forEach(([attr, count]) => {
+            const jobAttributes = JOB_ATTRIBUTES[job] || [];
+            if (jobAttributes.includes(attr)) {
+              if (count >= 9) estimatedBonusScore += 265;
+              if (count >= 12) estimatedBonusScore += 265;
+              if (count >= 15) estimatedBonusScore += 265;
+              if (count >= 18) estimatedBonusScore += 265;
+              if (count >= 21) estimatedBonusScore += 265;
+            }
+          });
+          
+          return estimatedBaseScore + estimatedBonusScore;
+        };
+        
+        // 우선순위 큐 노드
+        class Node {
+          constructor(pieceIndex, placedPieces, usedCells, usedUnique, score) {
+            this.pieceIndex = pieceIndex;
+            this.placedPieces = placedPieces;
+            this.usedCells = usedCells;
+            this.usedUnique = usedUnique;
+            this.score = score;
+            this.upperBound = calculateUpperBound(pieceIndex, placedPieces, usedCells, usedUnique);
+          }
+        }
+        
+        // 우선순위 큐
+        const priorityQueue = [];
+        const pushNode = (node) => {
+          priorityQueue.push(node);
+          priorityQueue.sort((a, b) => b.upperBound - a.upperBound);
+        };
+        const popNode = () => priorityQueue.shift();
+        
+        // 초기 노드
+        const initialUsedCells = new Set();
+        const initialNode = new Node(0, [], initialUsedCells, 0, { baseScore: 0, bonusScore: 0, totalScore: 0 });
+        pushNode(initialNode);
+        
+        let searchCount = 0;
+        const MAX_SEARCH = 500000;
+        
+        // 분기 한정법 실행
+        while (priorityQueue.length > 0 && searchCount < MAX_SEARCH) {
+          searchCount++;
+          const node = popNode();
+          
+          if (node.upperBound <= bestResult.score.totalScore) {
+            continue;
+          }
+          
+          if (node.pieceIndex >= sortedAllPieces.length) {
+            const score = calculateScore(node.placedPieces, board);
+            if (score.totalScore > bestResult.score.totalScore) {
+              bestResult = {
+                placedPieces: [...node.placedPieces],
+                score,
+              };
+            }
+            continue;
+          }
+          
+          const piece = sortedAllPieces[node.pieceIndex];
+          const currentAttrCounts = getCurrentAttributeCounts(node.placedPieces);
+          
+          if (piece.rarity === '유니크' && node.usedUnique >= 1) {
+            const skipNode = new Node(
+              node.pieceIndex + 1,
+              [...node.placedPieces],
+              new Set(node.usedCells),
+              node.usedUnique,
+              node.score
+            );
+            if (skipNode.upperBound > bestResult.score.totalScore) {
+              pushNode(skipNode);
+            }
+            continue;
+          }
+          
+          // 배치하지 않는 경우
+          const skipNode = new Node(
+            node.pieceIndex + 1,
+            [...node.placedPieces],
+            new Set(node.usedCells),
+            node.usedUnique,
+            node.score
+          );
+          if (skipNode.upperBound > bestResult.score.totalScore) {
+            pushNode(skipNode);
+          }
+          
+          // 배치하는 경우
+          if (piece.shapeCoords) {
+            let shouldSkipPiece = false;
+            if (piece.size <= 5 && piece.attribute) {
+              const jobAttributes = JOB_ATTRIBUTES[job] || [];
+              if (jobAttributes.includes(piece.attribute)) {
+                const currentCount = currentAttrCounts[piece.attribute] || 0;
+                if (currentCount >= 21) {
+                  shouldSkipPiece = true;
+                }
+              }
+            }
             
-            for (const { row, col } of possiblePositions) {
-              if (searchCount > MAX_SEARCH) break;
-              
-              // 배치 후 속성별 칸 수가 21칸을 넘는지 다시 확인
-              const placedCells = placePiece(piece, row, col, localUsedCells);
-              const testPlaced = [...currentPlaced, {
-                ...piece,
-                position: { row, col },
-                placedCells,
-              }];
-              const testAttrCounts = getCurrentAttributeCounts(testPlaced);
-              
-              let canPlace = true;
-              if (piece.size <= 5 && piece.attribute) {
-                const jobAttributes = JOB_ATTRIBUTES[job] || [];
-                if (jobAttributes.includes(piece.attribute)) {
-                  const newCount = testAttrCounts[piece.attribute] || 0;
-                  // 21칸을 넘어서면 배치하지 않음
-                  if (newCount > 21) {
-                    canPlace = false;
-                    removePiece(placedCells, localUsedCells);
-                  }
+            if (!shouldSkipPiece) {
+              const possiblePositions = [];
+              for (const { row, col } of openCells) {
+                if (canPlacePiece(piece, row, col, node.usedCells)) {
+                  possiblePositions.push({ row, col });
                 }
               }
               
-              if (canPlace) {
-                currentPlaced.push({
+              possiblePositions.sort((a, b) => {
+                const distA = Math.abs(a.row - 3) + Math.abs(a.col - 3);
+                const distB = Math.abs(b.row - 3) + Math.abs(b.col - 3);
+                return distA - distB;
+              });
+              
+              const maxPositions = Math.min(3, possiblePositions.length);
+              for (let i = 0; i < maxPositions; i++) {
+                if (searchCount >= MAX_SEARCH) break;
+                
+                const { row, col } = possiblePositions[i];
+                const newUsedCells = new Set(node.usedCells);
+                const placedCells = placePiece(piece, row, col, newUsedCells);
+                const newPlaced = [...node.placedPieces, {
                   ...piece,
                   position: { row, col },
                   placedCells,
-                });
-
-                // 다음 조각으로 재귀 (유니크 사용 여부 업데이트)
-                const newUsedUnique = usedUnique + (piece.rarity === '유니크' ? 1 : 0);
-                backtrack(pieceIndex + 1, currentPlaced, localUsedCells, newUsedUnique);
-
-                // 백트래킹: 배치 제거
-                removePiece(placedCells, localUsedCells);
-                currentPlaced.pop();
+                }];
+                const testAttrCounts = getCurrentAttributeCounts(newPlaced);
+                
+                let canPlace = true;
+                if (piece.size <= 5 && piece.attribute) {
+                  const jobAttributes = JOB_ATTRIBUTES[job] || [];
+                  if (jobAttributes.includes(piece.attribute)) {
+                    const newCount = testAttrCounts[piece.attribute] || 0;
+                    if (newCount > 21) {
+                      canPlace = false;
+                    }
+                  }
+                }
+                
+                if (canPlace) {
+                  const newScore = calculateScore(newPlaced, board);
+                  const newUsedUnique = node.usedUnique + (piece.rarity === '유니크' ? 1 : 0);
+                  const placeNode = new Node(
+                    node.pieceIndex + 1,
+                    newPlaced,
+                    newUsedCells,
+                    newUsedUnique,
+                    newScore
+                  );
+                  
+                  if (placeNode.upperBound > bestResult.score.totalScore) {
+                    pushNode(placeNode);
+                  }
+                }
               }
             }
           }
         }
         
-        // 현재 조각을 배치하지 않는 경우도 시도
-        backtrack(pieceIndex + 1, currentPlaced, localUsedCells, usedUnique);
+        return bestResult;
       };
-
-      // 백트래킹 실행 (usedUnique: 0부터 시작)
-      backtrack(0, [], usedCells, 0);
       
-      if (searchCount >= MAX_SEARCH) {
-        console.warn(`탐색 횟수 제한에 도달했습니다 (${searchCount}회). 현재 최선의 결과를 표시합니다.`);
+      // ===== 3단계: A* 알고리즘 (휴리스틱 기반) =====
+      const solveWithAStar = () => {
+        let bestResult = {
+          placedPieces: [],
+          score: { baseScore: 0, bonusScore: 0, totalScore: 0 },
+        };
+        
+        // 현재 배치된 조각들의 속성별 칸 수 계산
+        const getCurrentAttributeCounts = (placedPieces) => {
+          const counts = {
+            광휘: 0, 관통: 0, 원소: 0, 파쇄: 0,
+            축복: 0, 낙인: 0, 재생: 0,
+          };
+          placedPieces.forEach(piece => {
+            if (piece.size <= 5 && piece.attribute) {
+              counts[piece.attribute] += piece.size;
+            }
+          });
+          return counts;
+        };
+        
+        // 휴리스틱 함수: 남은 조각들로 얻을 수 있는 최대 점수 추정
+        const heuristic = (pieceIndex, currentPlaced, localUsedCells, usedUnique) => {
+          const remainingPieces = sortedAllPieces.slice(pieceIndex);
+          const remainingCells = new Set();
+          for (let row = 0; row < 7; row++) {
+            for (let col = 0; col < 7; col++) {
+              if (board[row][col] === 1) {
+                const cellKey = `${row}-${col}`;
+                if (!localUsedCells.has(cellKey)) {
+                  remainingCells.add(cellKey);
+                }
+              }
+            }
+          }
+          
+          const remainingCellCount = remainingCells.size;
+          if (remainingCellCount === 0) return 0;
+          
+          // 남은 조각들을 점수 효율 순으로 정렬
+          const pieceEfficiency = remainingPieces.map(piece => {
+            const pieceScore = RARITY_SCORES[piece.rarity] * piece.size;
+            return {
+              piece,
+              efficiency: pieceScore / piece.size,
+              score: pieceScore,
+              size: piece.size,
+            };
+          }).sort((a, b) => b.efficiency - a.efficiency);
+          
+          const currentAttrCounts = getCurrentAttributeCounts(currentPlaced);
+          let estimatedBaseScore = 0;
+          let estimatedAttrCounts = { ...currentAttrCounts };
+          let remainingUnique = usedUnique;
+          let usedCellCount = 0;
+          
+          for (const { piece, score, size } of pieceEfficiency) {
+            if (piece.rarity === '유니크' && remainingUnique >= 1) continue;
+            if (usedCellCount + size > remainingCellCount) continue;
+            
+            if (piece.size <= 5 && piece.attribute) {
+              const jobAttributes = JOB_ATTRIBUTES[job] || [];
+              if (jobAttributes.includes(piece.attribute)) {
+                const currentCount = estimatedAttrCounts[piece.attribute] || 0;
+                if (currentCount >= 21) continue;
+              }
+            }
+            
+            estimatedBaseScore += score;
+            usedCellCount += size;
+            if (piece.size <= 5 && piece.attribute) {
+              estimatedAttrCounts[piece.attribute] = (estimatedAttrCounts[piece.attribute] || 0) + size;
+            }
+            if (piece.rarity === '유니크') {
+              remainingUnique++;
+            }
+          }
+          
+          // 보너스 점수 추정
+          let estimatedBonusScore = 0;
+          Object.entries(estimatedAttrCounts).forEach(([attr, count]) => {
+            const jobAttributes = JOB_ATTRIBUTES[job] || [];
+            if (jobAttributes.includes(attr)) {
+              if (count >= 9) estimatedBonusScore += 265;
+              if (count >= 12) estimatedBonusScore += 265;
+              if (count >= 15) estimatedBonusScore += 265;
+              if (count >= 18) estimatedBonusScore += 265;
+              if (count >= 21) estimatedBonusScore += 265;
+            }
+          });
+          
+          return estimatedBaseScore + estimatedBonusScore;
+        };
+        
+        // A* 노드
+        class AStarNode {
+          constructor(pieceIndex, placedPieces, usedCells, usedUnique, score) {
+            this.pieceIndex = pieceIndex;
+            this.placedPieces = placedPieces;
+            this.usedCells = usedCells;
+            this.usedUnique = usedUnique;
+            this.score = score;
+            this.g = score.totalScore; // 실제 점수
+            this.h = heuristic(pieceIndex, placedPieces, usedCells, usedUnique); // 휴리스틱
+            this.f = this.g + this.h; // f = g + h
+          }
+        }
+        
+        // 우선순위 큐 (f 값이 큰 순, 최대 점수를 찾기 위해)
+        // f = g + h (현재 점수 + 추정 남은 점수)
+        const openSet = [];
+        const pushNode = (node) => {
+          openSet.push(node);
+          openSet.sort((a, b) => {
+            if (b.f !== a.f) return b.f - a.f; // f 값이 큰 순 (최대 점수 우선)
+            return b.g - a.g; // 같으면 현재 점수(g)가 큰 순
+          });
+        };
+        const popNode = () => openSet.shift();
+        
+        // 초기 노드
+        const initialUsedCells = new Set();
+        const initialNode = new AStarNode(0, [], initialUsedCells, 0, { baseScore: 0, bonusScore: 0, totalScore: 0 });
+        pushNode(initialNode);
+        
+        let searchCount = 0;
+        const MAX_SEARCH = 100000; // 탐색 제한 (더 빠르게)
+        
+        // A* 실행
+        while (openSet.length > 0 && searchCount < MAX_SEARCH) {
+          searchCount++;
+          const node = popNode();
+          
+          // 모든 조각을 확인한 경우 (개수 제한 없음)
+          if (node.pieceIndex >= sortedAllPieces.length) {
+            const score = calculateScore(node.placedPieces, board);
+            if (score.totalScore > bestResult.score.totalScore) {
+              bestResult = {
+                placedPieces: [...node.placedPieces],
+                score,
+              };
+            }
+            continue;
+          }
+          
+          const piece = sortedAllPieces[node.pieceIndex];
+          const currentAttrCounts = getCurrentAttributeCounts(node.placedPieces);
+          
+          // 유니크 제한 확인
+          if (piece.rarity === '유니크' && node.usedUnique >= 1) {
+            const skipNode = new AStarNode(
+              node.pieceIndex + 1,
+              [...node.placedPieces],
+              new Set(node.usedCells),
+              node.usedUnique,
+              node.score
+            );
+            pushNode(skipNode);
+            continue;
+          }
+          
+          // 배치하지 않는 경우
+          const skipNode = new AStarNode(
+            node.pieceIndex + 1,
+            [...node.placedPieces],
+            new Set(node.usedCells),
+            node.usedUnique,
+            node.score
+          );
+          pushNode(skipNode);
+          
+          // 배치하는 경우
+          if (piece.shapeCoords) {
+            let shouldSkipPiece = false;
+            if (piece.size <= 5 && piece.attribute) {
+              const jobAttributes = JOB_ATTRIBUTES[job] || [];
+              if (jobAttributes.includes(piece.attribute)) {
+                const currentCount = currentAttrCounts[piece.attribute] || 0;
+                if (currentCount >= 21) {
+                  shouldSkipPiece = true;
+                }
+              }
+            }
+            
+            if (!shouldSkipPiece) {
+              const possiblePositions = [];
+              for (const { row, col } of openCells) {
+                if (canPlacePiece(piece, row, col, node.usedCells)) {
+                  possiblePositions.push({ row, col });
+                }
+              }
+              
+              possiblePositions.sort((a, b) => {
+                const distA = Math.abs(a.row - 3) + Math.abs(a.col - 3);
+                const distB = Math.abs(b.row - 3) + Math.abs(b.col - 3);
+                return distA - distB;
+              });
+              
+              // 최대 2개 위치만 시도 (성능 최적화)
+              const maxPositions = Math.min(2, possiblePositions.length);
+              for (let i = 0; i < maxPositions; i++) {
+                if (searchCount >= MAX_SEARCH) break;
+                
+                const { row, col } = possiblePositions[i];
+                const newUsedCells = new Set(node.usedCells);
+                const placedCells = placePiece(piece, row, col, newUsedCells);
+                const newPlaced = [...node.placedPieces, {
+                  ...piece,
+                  position: { row, col },
+                  placedCells,
+                }];
+                const testAttrCounts = getCurrentAttributeCounts(newPlaced);
+                
+                let canPlace = true;
+                if (piece.size <= 5 && piece.attribute) {
+                  const jobAttributes = JOB_ATTRIBUTES[job] || [];
+                  if (jobAttributes.includes(piece.attribute)) {
+                    const newCount = testAttrCounts[piece.attribute] || 0;
+                    if (newCount > 21) {
+                      canPlace = false;
+                    }
+                  }
+                }
+                
+                if (canPlace) {
+                  const newScore = calculateScore(newPlaced, board);
+                  const newUsedUnique = node.usedUnique + (piece.rarity === '유니크' ? 1 : 0);
+                  const placeNode = new AStarNode(
+                    node.pieceIndex + 1,
+                    newPlaced,
+                    newUsedCells,
+                    newUsedUnique,
+                    newScore
+                  );
+                  pushNode(placeNode);
+                }
+              }
+            }
+          }
+        }
+        
+        return bestResult;
+      };
+      
+      // ===== 4단계: 알고리즘 실행 및 비교 =====
+      console.log('A* 알고리즘 실행 중...');
+      const aStarResult = solveWithAStar();
+      aStarResult.usedCells = Array.from(new Set(aStarResult.placedPieces.flatMap(p => 
+        p.placedCells.map(c => `${c.row}-${c.col}`)
+      )));
+      aStarResult.algorithm = 'A* (휴리스틱)';
+      
+      console.log('제한된 백트래킹 알고리즘 실행 중...');
+      let backtrackingResult = {
+        placedPieces: [],
+        score: { baseScore: 0, bonusScore: 0, totalScore: 0 },
+        usedCells: [],
+        algorithm: '백트래킹',
+      };
+      
+      // 목표 조합으로 제한된 백트래킹 시도 (최대 10회만)
+      let currentPieces = [...target.pieces];
+      let attemptCount = 0;
+      const MAX_ATTEMPTS = 10; // 시도 횟수 대폭 감소
+      
+      while (attemptCount < MAX_ATTEMPTS && currentPieces.length > 0) {
+        attemptCount++;
+        const placedPieces = solveWithBacktracking(currentPieces);
+        
+        if (placedPieces.length > 0) {
+          const score = calculateScore(placedPieces, board);
+          
+          if (score.totalScore > backtrackingResult.score.totalScore) {
+            backtrackingResult = {
+              placedPieces: placedPieces,
+              score,
+              usedCells: Array.from(new Set(placedPieces.flatMap(p => 
+                p.placedCells.map(c => `${c.row}-${c.col}`)
+              ))),
+              algorithm: '백트래킹',
+            };
+            
+            if (score.totalScore >= target.totalScore * 0.95) {
+              console.log(`백트래킹: 목표 점수에 근접했습니다. (${score.totalScore}/${target.totalScore})`);
+              break;
+            }
+          }
+        }
+        
+        const currentScore = placedPieces.length > 0 ? calculateScore(placedPieces, board).totalScore : 0;
+        const shouldRemovePiece = placedPieces.length < currentPieces.length || 
+                                  currentScore < target.totalScore * 0.8;
+        
+        if (shouldRemovePiece && currentPieces.length > 1) {
+          const sortedForRemoval = [...currentPieces].sort((a, b) => {
+            const rarityOrder = { '유니크': 4, '슈퍼에픽': 3, '에픽': 2, '레어': 1 };
+            const orderA = rarityOrder[a.rarity] || 0;
+            const orderB = rarityOrder[b.rarity] || 0;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.size - b.size;
+          });
+          
+          const pieceToRemove = sortedForRemoval[0];
+          if (pieceToRemove) {
+            currentPieces = currentPieces.filter(p => p.id !== pieceToRemove.id);
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      
+      console.log(`A* 결과: ${aStarResult.score.totalScore}점`);
+      console.log(`백트래킹 결과: ${backtrackingResult.score.totalScore}점`);
+      
+      // 두 결과 중 점수가 높은 것을 선택
+      if (aStarResult.score.totalScore > backtrackingResult.score.totalScore) {
+        bestResult = aStarResult;
+        console.log('A* 알고리즘이 더 높은 점수를 달성했습니다.');
+      } else {
+        bestResult = backtrackingResult;
+        console.log('백트래킹이 더 높은 점수를 달성했습니다.');
+      }
+      
+      // 최종 결과가 없으면 빈 결과 반환
+      if (bestResult.placedPieces.length === 0) {
+        console.warn('퍼즐을 맞출 수 있는 조합을 찾지 못했습니다.');
       }
       
       setResult(bestResult);
@@ -1110,6 +1860,14 @@ function PuzzlePage() {
               <Typography variant="h4" sx={{ mb: 1.5, fontWeight: 'bold' }}>
                 총 점수: {result.score.totalScore.toLocaleString()}점
               </Typography>
+              {result.algorithm && (
+                <Chip
+                  label={`사용 알고리즘: ${result.algorithm}`}
+                  color="primary"
+                  size="small"
+                  sx={{ mb: 1.5 }}
+                />
+              )}
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 기본 점수: {result.score.baseScore.toLocaleString()}점
               </Typography>
@@ -1136,6 +1894,27 @@ function PuzzlePage() {
                   );
                 })}
               </Box>
+              {/* 유니크 조각 별도 표기 */}
+              {result.placedPieces.filter(p => p.rarity === '유니크').length > 0 && (
+                <>
+                  <Typography variant="overline" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    유니크 조각
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                    {result.placedPieces
+                      .filter(p => p.rarity === '유니크')
+                      .map((piece, idx) => (
+                        <Chip
+                          key={idx}
+                          label={`${piece.attribute}: ${piece.size}칸`}
+                          size="small"
+                          color="warning"
+                          sx={{ fontSize: '11px', fontWeight: 'bold' }}
+                        />
+                      ))}
+                  </Box>
+                </>
+              )}
               <Typography variant="overline" color="text.secondary" display="block" sx={{ mb: 1 }}>
                 배치된 설탕유리 조각: {result.placedPieces.length}개
               </Typography>
@@ -1525,10 +2304,12 @@ function PuzzlePage() {
                   );
                 })}
                 
-                {/* 8칸 조각 (유니크만) */}
+                {/* 8칸 조각 (유니크만) - 현재 역할군 + 전 역할군 조각 표시 */}
                 {sizesToShow.includes(8) && (
                   <div style={{ marginTop: sizesToShow.filter(s => s <= 5).length > 0 ? 20 : 0 }}>
-                    <div className="label" style={{ marginBottom: 12, fontWeight: 'bold', fontSize: '14px' }}>8칸 설탕유리 조각 (유니크)</div>
+                    <div className="label" style={{ marginBottom: 12, fontWeight: 'bold', fontSize: '14px' }}>
+                      8칸 설탕유리 조각 (유니크) - {job} 역할군 + 전 역할군
+                    </div>
                     <div style={{ 
                       display: 'grid', 
                       gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 

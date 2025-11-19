@@ -270,7 +270,7 @@ function GameView({ game }) {
     <main className="container game-container">
       <section className="panel">
         <div className="label" style={{ margin: 8 }}>시즈나이트 등급</div>
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
             <ModeSegment mode={game.rewardMode} onChange={handleModeChange} label="시즈나이트 종류" />
             <button className="btn" onClick={game.reset}>초기화</button>
@@ -661,10 +661,8 @@ function ProbabilityTool() {
   return (
     <main className="container prob-container-single">
       <section className="panel prob-panel">
-        <h2 style={{ margin: '0' }}>상태 입력</h2>
-
         <div className="label" style={{ margin: 8 }}>시즈나이트 등급</div>
-        <div className="row" style={{ gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="row" style={{ gap: 8, marginBottom: 0, flexWrap: 'wrap' }}>
           <ModeSegment mode={rewardMode} onChange={setRewardMode} />
         </div>
 
@@ -856,7 +854,7 @@ export default function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1>🍪 CookieRun:TOA - 잊혀진 기억의 제단 🍪</h1>
             <button className="btn" onClick={() => setPage('main')}>
-              시즈나이트 광산으로 돌아가기
+              🪨시즈나이트 광산으로 돌아가기
             </button>
           </div>
         </header>
@@ -871,7 +869,7 @@ export default function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1>🍪 CookieRun:TOA - 시즈나이트 깍기 시뮬레이터 🍪</h1>
           <button className="btn primary" onClick={() => setPage('puzzle')} style={{ marginLeft: 'auto' }}>
-            잊혀진 기억의 제단으로 돌아가기
+            🕯️잊혀진 기억의 제단으로 돌아가기
           </button>
         </div>
         <ViewToggle view={view} onChange={setView} />
