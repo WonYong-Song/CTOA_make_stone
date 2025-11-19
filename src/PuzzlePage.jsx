@@ -20,12 +20,12 @@ import { Close, Add, Delete, ExpandMore, ExpandLess, HelpOutline } from '@mui/ic
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
-// 등급별 색상
+// 등급별 색상 (명도 80%)
 const RARITY_COLORS = {
-  '레어': '#5c7cc4',      // 파란색
-  '에픽': '#fa75e6',      // 핑크색
-  '슈퍼에픽': '#db3534',  // 빨간색
-  '유니크': '#f5eb36',    // 노란색
+  '레어': '#9db3e0',      // 파란색 (명도 80%)
+  '에픽': '#fcb3f0',      // 핑크색 (명도 80%)
+  '슈퍼에픽': '#e86b6a',  // 빨간색 (명도 80%)
+  '유니크': '#f9f28a',    // 노란색 (명도 80%)
 };
 
 // 등급별 칸당 점수
@@ -881,7 +881,7 @@ function PuzzlePage() {
               
               // border 스타일 결정
               const borderStyle = isInitial ? '#3b82f6' : 'var(--border)';
-              const borderWidth = isUsed ? '3px' : '1px';
+              const borderWidth = isUsed ? '8px' : '1px';
               const borderColor = isUsed && currentPiece 
                 ? '#22c55e' // 초록색으로 조각 경계 표시
                 : borderStyle;
