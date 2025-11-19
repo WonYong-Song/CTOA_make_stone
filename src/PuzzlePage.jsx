@@ -28,19 +28,19 @@ const RARITY_COLORS = {
   '유니크': '#f9f28a',    // 노란색 (명도 80%)
 };
 
-// 속성별 테두리 색상 (명도 70%)
+// 속성별 테두리 색상 (명도와 채도 10% 낮춤 - 진한 색상)
 const ATTRIBUTE_BORDER_COLORS = {
-  '광휘': '#ffd700',      // 금색
-  '관통': '#c0c0c0',      // 은색
-  '원소': '#00ffff',      // 청록색
-  '파쇄': '#ff6347',      // 토마토색
-  '축복': '#9370db',      // 보라색
-  '낙인': '#ff1493',      // 딥핑크
-  '재생': '#32cd32',      // 라임그린
-  '딜러': '#4169e1',      // 로얄블루
-  '스트라이커': '#ff4500', // 오렌지레드
-  '서포터': '#20b2aa',    // 라이트시그린
-  '전 역할군': '#daa520',  // 골든로드
+  '광휘': '#e6c200',      // 금색 (명도/채도 10% 낮춤)
+  '관통': '#adadad',      // 은색 (명도 10% 낮춤)
+  '원소': '#00e6e6',      // 청록색 (명도/채도 10% 낮춤)
+  '파쇄': '#e6593f',      // 토마토색 (명도/채도 10% 낮춤)
+  '축복': '#8464c5',      // 보라색 (명도/채도 10% 낮춤)
+  '낙인': '#e61383',      // 딥핑크 (명도/채도 10% 낮춤)
+  '재생': '#2db82d',      // 라임그린 (명도/채도 10% 낮춤)
+  '딜러': '#3a5ec9',      // 로얄블루 (명도/채도 10% 낮춤)
+  '스트라이커': '#e63f00', // 오렌지레드 (명도/채도 10% 낮춤)
+  '서포터': '#1d9f99',    // 라이트시그린 (명도/채도 10% 낮춤)
+  '전 역할군': '#c4951c',  // 골든로드 (명도/채도 10% 낮춤)
 };
 
 // 등급별 칸당 점수
@@ -1680,13 +1680,27 @@ function PuzzlePage() {
         <section className="panel" style={{ gridColumn: '1 / -1' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
             <Typography variant="h5" component="h2">역할군 선택</Typography>
-            <IconButton
-              onClick={() => setShowHelp(true)}
-              color="primary"
-              size="small"
-            >
-              <HelpOutline />
-            </IconButton>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography 
+                variant="caption" 
+                color="warning.main" 
+                sx={{ 
+                  fontSize: '0.75rem',
+                  fontStyle: 'italic',
+                  textAlign: 'right',
+                  maxWidth: '300px'
+                }}
+              >
+                * 해당 최적화는 알고리즘에 따라 출력된 값으로 최고 점수가 아닐 수 있음
+              </Typography>
+              <IconButton
+                onClick={() => setShowHelp(true)}
+                color="primary"
+                size="small"
+              >
+                <HelpOutline />
+              </IconButton>
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5 }}>
             {['딜러', '스트라이커', '서포터'].map(j => (
@@ -2083,87 +2097,111 @@ function PuzzlePage() {
             );
           })}
           
-          {/* 8칸 조각: 역할군별로 표시 */}
-          {pieces.filter(p => p.size === 8).length > 0 && (
-            <div style={{ marginTop: 8, marginBottom: 8 }}>
-              <div
-                onClick={() => {
-                  const key = `역할군_${job}`;
-                  setExpandedAttributes(prev => ({
-                    ...prev,
-                    [key]: !prev[key],
-                  }));
-                }}
-                style={{
-                  padding: '8px',
-                  background: 'var(--panel-2)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontWeight: 'bold', fontSize: 14 }}>
-                  {job} (8칸) ({pieces.filter(p => p.size === 8 && p.attribute === job).length}개)
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                  {expandedAttributes[`역할군_${job}`] ? '▼' : '▶'}
-                </span>
-              </div>
-              {expandedAttributes[`역할군_${job}`] && (
-                <div style={{ 
-                  marginTop: 4, 
-                  padding: '8px',
-                  background: 'var(--panel)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                }}>
-                  {pieces.filter(p => p.size === 8 && p.attribute === job).length === 0 ? (
-                    <div className="label" style={{ textAlign: 'center', padding: '8px' }}>
-                      조각이 없습니다
-                    </div>
-                  ) : (
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(5, 1fr)',
-                      gap: '8px',
-                    }}>
-                      {pieces.filter(p => p.size === 8 && p.attribute === job).map(piece => (
-                        <div
-                          key={piece.id}
-                          className="card"
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '8px',
-                            gap: '4px',
-                            position: 'relative',
-                          }}
-                        >
-                          {renderShape(
-                            getAvailableShapes(8).find(s => s.name === piece.shape)?.shape || [[1]],
-                            piece.rarity,
-                            18
-                          )}
-                          <button
-                            className="btn"
-                            onClick={() => handleRemovePiece(piece.id)}
-                            style={{ padding: '4px 8px', fontSize: 10, width: '100%' }}
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+          {/* 8칸 조각: 유니크 등급 통합 표시 */}
+          {pieces.filter(p => p.size === 8).length > 0 && (() => {
+            const allRoles = ['딜러', '스트라이커', '서포터', '전 역할군'];
+            
+            // 모든 역할군의 조각 모양을 한 번만 수집
+            const allUniqueShapes = [];
+            allRoles.forEach(r => {
+              const roleShapes = PIECE_SHAPES[8][r] || [];
+              roleShapes.forEach(s => {
+                allUniqueShapes.push(s);
+              });
+            });
+            
+            // 모든 유니크 조각 가져오기
+            const allUniquePieces = pieces.filter(p => p.size === 8);
+            const uniqueKey = '유니크_전체';
+            const isExpanded = expandedAttributes[uniqueKey] !== false;
+            
+            return (
+              <div style={{ marginTop: 8, marginBottom: 8 }}>
+                <div
+                  onClick={() => {
+                    setExpandedAttributes(prev => ({
+                      ...prev,
+                      [uniqueKey]: !isExpanded,
+                    }));
+                  }}
+                  style={{
+                    padding: '8px',
+                    background: 'var(--panel-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold', fontSize: 14 }}>
+                    유니크 (8칸) ({allUniquePieces.length}개)
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {isExpanded ? '▼' : '▶'}
+                  </span>
                 </div>
-              )}
-            </div>
-          )}
+                {isExpanded && (
+                  <div style={{ 
+                    marginTop: 4, 
+                    padding: '8px',
+                    background: 'var(--panel)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                  }}>
+                    {allUniquePieces.length === 0 ? (
+                      <div className="label" style={{ textAlign: 'center', padding: '8px' }}>
+                        조각이 없습니다
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(5, 1fr)',
+                        gap: '8px',
+                      }}>
+                        {allUniquePieces.map(piece => {
+                          const shapeData = allUniqueShapes.find(s => s.name === piece.shape);
+                          
+                          return (
+                            <div
+                              key={piece.id}
+                              className="card"
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '8px',
+                                gap: '4px',
+                                position: 'relative',
+                              }}
+                            >
+                              {renderShape(
+                                shapeData?.shape || [[1]],
+                                piece.rarity,
+                                18
+                              )}
+                              <div style={{ fontSize: 9, color: 'var(--muted)', textAlign: 'center', marginTop: '4px' }}>
+                                {piece.attribute}
+                              </div>
+                              <button
+                                className="btn"
+                                onClick={() => handleRemovePiece(piece.id)}
+                                style={{ padding: '4px 8px', fontSize: 10, width: '100%' }}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* 조합 버튼 */}
@@ -2203,7 +2241,7 @@ function PuzzlePage() {
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: 0, overflow: 'hidden' }}>
         <div style={{ 
           display: 'flex',
           flexDirection: 'column',
@@ -2217,7 +2255,9 @@ function PuzzlePage() {
             mb: 2, 
             flexShrink: 0,
             marginBottom: 1,
-            marginTop: 1
+            marginTop: 1,
+            px: 3,
+            pt: 1
           }}>
             {/* 등급 선택 (드랍박스) */}
             <FormControl fullWidth>
@@ -2252,13 +2292,15 @@ function PuzzlePage() {
           </Box>
 
           {/* 구분선 */}
-          <Divider sx={{ mb: 2, flexShrink: 0 }} />
+          <Divider sx={{ mb: 2, flexShrink: 0, mx: 3 }} />
 
           {/* 설탕유리 조각 선택 영역 (스크롤 가능) */}
-          <div style={{ 
+          <Box sx={{ 
             flex: 1,
             overflowY: 'auto',
             minHeight: 0,
+            px: 3,
+            pb: 2
           }}>
 
           {/* 선택한 등급에 따라 표시할 조각 크기 결정 */}
@@ -2338,62 +2380,96 @@ function PuzzlePage() {
                   );
                 })}
                 
-                {/* 8칸 조각 (유니크만) - 현재 역할군 + 전 역할군 조각 표시 */}
-                {sizesToShow.includes(8) && (
-                  <div style={{ marginTop: sizesToShow.filter(s => s <= 5).length > 0 ? 20 : 0 }}>
-                    <div className="label" style={{ marginBottom: 12, fontWeight: 'bold', fontSize: '14px' }}>
-                      8칸 설탕유리 조각 (유니크) - {job} 역할군 + 전 역할군
+                {/* 8칸 조각 (유니크만) - 전체 역할군 조각 표시 */}
+                {sizesToShow.includes(8) && (() => {
+                  // 모든 역할군의 8칸 조각 가져오기
+                  const allUniqueShapes = [];
+                  const jobRoles = ['딜러', '스트라이커', '서포터', '전 역할군'];
+                  
+                  jobRoles.forEach(role => {
+                    const roleShapes = PIECE_SHAPES[8][role] || [];
+                    roleShapes.forEach(shape => {
+                      allUniqueShapes.push({
+                        ...shape,
+                        role: role, // 역할군 정보 추가
+                      });
+                    });
+                  });
+                  
+                  return (
+                    <div style={{ marginTop: sizesToShow.filter(s => s <= 5).length > 0 ? 20 : 0 }}>
+                      <div className="label" style={{ marginBottom: 12, fontWeight: 'bold', fontSize: '14px' }}>
+                        8칸 설탕유리 조각 (유니크) - 전체 역할군
+                      </div>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
+                        gap: '12px' 
+                      }}>
+                        {allUniqueShapes.map((shape, idx) => {
+                          // 조각의 역할군 결정
+                          const shapeRole = shape.role;
+                          
+                          return (
+                            <div
+                              key={`${shapeRole}-${idx}`}
+                              onClick={() => {
+                                // 조각 추가 시 역할군 정보 전달
+                                const shapeCoords = shape2DToCoords(shape.shape);
+                                let pieceAttribute = shapeRole;
+                                
+                                const newPiece = {
+                                  id: Date.now(),
+                                  shape: shape.name,
+                                  shapeCoords: shapeCoords,
+                                  size: 8,
+                                  rarity: '유니크',
+                                  attribute: pieceAttribute,
+                                };
+                                
+                                setPieces([...pieces, newPiece]);
+                              }}
+                              style={{
+                                padding: '12px',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                background: 'var(--panel-2)',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '6px',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'var(--panel)';
+                                e.currentTarget.style.borderColor = RARITY_COLORS['유니크'];
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'var(--panel-2)';
+                                e.currentTarget.style.borderColor = 'var(--border)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              {renderShape(shape.shape, '유니크', 16)}
+                              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
+                                {shape.name}
+                              </div>
+                              <div style={{ fontSize: 9, color: RARITY_COLORS['유니크'], fontWeight: 'bold' }}>
+                                유니크 · {shapeRole}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
-                      gap: '12px' 
-                    }}>
-                      {getAvailableShapes(8).map((shape, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => {
-                            handleAddPiece(8, idx, '유니크', job);
-                          }}
-                          style={{
-                            padding: '12px',
-                            border: '1px solid var(--border)',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            background: 'var(--panel-2)',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '6px',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'var(--panel)';
-                            e.currentTarget.style.borderColor = RARITY_COLORS['유니크'];
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'var(--panel-2)';
-                            e.currentTarget.style.borderColor = 'var(--border)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }}
-                        >
-                          {renderShape(shape.shape, '유니크', 16)}
-                          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
-                            {shape.name}
-                          </div>
-                          <div style={{ fontSize: 9, color: RARITY_COLORS['유니크'], fontWeight: 'bold' }}>
-                            유니크
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             );
           })()}
-          </div>
+          </Box>
         </div>
         </DialogContent>
       </Dialog>
