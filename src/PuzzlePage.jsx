@@ -759,7 +759,7 @@ function PuzzlePage() {
                   maxWidth: '300px'
                 }}
               >
-                * 해당 최적화는 선택된 역할에 해당하는 설탕유리 조각을 활용하여 알고리즘에 따라 출력된 값으로 최고 점수가 아닐 수 있음
+                * 조각 정보가 과다할 경우 계산이 올리 걸릴 수 있습니다. \n*알고리즘에 의한 결과로 최고 점수가 아닐 수 있습니다.
               </Typography>
               <IconButton
                 onClick={() => setShowHelp(true)}
